@@ -1,0 +1,24 @@
+# Public base URL for the wiki.
+# The runner appends /{name}/ when building each repository's site.
+site_url: "https://docs.ardikabs.com"
+
+# Directory where the runner writes generated sites.
+# Each repository is built into: {site_dir}/{name}
+site_dir: "/srv/docs"
+
+# Parent directory containing the repository checkouts.
+# Each repository should be available at: {repo_dir}/{name}
+repo_dir: "/repos"
+
+# Repositories to publish.
+repositories:
+  - name: "hibernator"
+    # Git URL for the repository.
+    # Used by your git-sync setup; the Python runner shown earlier
+    # does not itself read or clone this field.
+    git: "https://github.com/ardikabs/hibernator"
+
+    # Path, relative to the repository root, to the MkDocs project directory.
+    # This directory must contain mkdocs.yml.
+    # For example: /repos/hibernator/website/mkdocs.yml
+    docs: "website"
