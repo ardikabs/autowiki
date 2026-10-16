@@ -10,13 +10,29 @@ site_dir: "/srv/docs"
 # Each repository should be available at: {repo_dir}/{name}
 repo_dir: "/repos"
 
+# Timeout for one repository sync/build, in seconds. The worker process and
+# child processes are terminated before another attempt can run.
+build_timeout_seconds: 600
+
+# Maximum number of repository sync/build workers running concurrently.
+max_concurrent_builds: 4
+
+# Shared directory for inter-process locks (defaults to {repo_dir}/.autowiki-locks).
+# lock_dir: "/run/autowiki-locks"
+
 # Repositories to publish.
 repositories:
   - name: "hibernator"
+
+    label: "Hibernator - A Cloud Off-Hours Manager"
+
+    description: "Declarative Kubernetes operator for suspending and restoring cloud infrastructure during off-hours."
+
     # Git URL for the repository.
-    # Used by your git-sync setup; the Python runner shown earlier
-    # does not itself read or clone this field.
     git: "https://github.com/ardikabs/hibernator"
+
+    # Git branch, tag, or ref to fetch and track.
+    revision: "main"
 
     # Path, relative to the repository root, to the MkDocs project directory.
     # This directory must contain mkdocs.yml.

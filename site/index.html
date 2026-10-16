@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f3ed">
+    <meta name="description" content="Your engineering wiki, automatically built from Git.">
+    <title>autowiki — Your engineering wiki, automatically built from Git</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f5f3ed;
+        --ink: #22251f;
+        --muted: #70736b;
+        --line: #ddded5;
+        --accent: #315fce;
+        --accent-light: #e8edfb;
+        --card: #fffefa;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "DM Sans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      .shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 28px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        color: white;
+        background: var(--accent);
+        border-radius: 9px;
+        font-family: "Manrope", sans-serif;
+        font-size: 20px;
+        font-weight: 800;
+      }
+      .brand-name { font-family: "Manrope", sans-serif; font-size: 19px; font-weight: 800; letter-spacing: -0.7px; }
+      .brand-auto { color: var(--accent); }
+      .brand-wiki { color: var(--ink); }
+      .top-note { color: var(--muted); font-family: "DM Mono", monospace; font-size: 11px; letter-spacing: 0.04em; }
+      .hero { padding: 76px 0 55px; }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--accent);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .eyebrow::before { width: 7px; height: 7px; background: #4e9b72; border-radius: 50%; content: ""; }
+      h1 {
+        max-width: 800px;
+        margin: 20px 0 16px;
+        font-family: "Manrope", sans-serif;
+        font-size: clamp(42px, 6.5vw, 76px);
+        font-weight: 600;
+        letter-spacing: -0.065em;
+        line-height: 1.03;
+      }
+      h1 span { color: var(--accent); }
+      .intro { max-width: 610px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+      .library { padding: 15px 0 82px; }
+      .section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+      h2 { margin: 0; font-family: "Manrope", sans-serif; font-size: 21px; letter-spacing: -0.04em; }
+      .count { margin-top: 5px; color: var(--muted); font-size: 13px; }
+      .search-wrap { position: relative; width: min(330px, 100%); }
+      .search-wrap svg { position: absolute; top: 12px; left: 13px; color: #83867f; }
+      .search {
+        width: 100%;
+        height: 42px;
+        padding: 0 14px 0 40px;
+        color: var(--ink);
+        background: transparent;
+        border: 1px solid #cfd0c7;
+        border-radius: 7px;
+        outline: none;
+        font: inherit;
+        font-size: 13px;
+      }
+      .search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #315fce1a; }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; }
+      .card {
+        position: relative;
+        min-height: 188px;
+        padding: 22px;
+        overflow: hidden;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        text-decoration: none;
+        transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+      }
+      .card:hover { transform: translateY(-3px); border-color: #aebee8; box-shadow: 0 10px 28px #303c5710; }
+      .card-icon { display: grid; width: 36px; height: 36px; place-items: center; color: var(--accent); background: var(--accent-light); border-radius: 8px; }
+      .card h3 { margin: 24px 0 7px; font-family: "Manrope", sans-serif; font-size: 17px; letter-spacing: -0.035em; }
+      .card p { max-width: 280px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+      .arrow { position: absolute; top: 24px; right: 22px; color: #969990; transition: color 160ms ease, transform 160ms ease; }
+      .card:hover .arrow { transform: translate(2px, -2px); color: var(--accent); }
+      .empty {
+        grid-column: 1 / -1;
+        padding: 42px 24px;
+        color: var(--muted);
+        background: #ffffff70;
+        border: 1px dashed #c9cbc2;
+        border-radius: 9px;
+        text-align: center;
+        line-height: 1.7;
+      }
+      .empty strong { display: block; margin-bottom: 5px; color: var(--ink); font-family: "Manrope", sans-serif; font-size: 16px; }
+      .footer { display: flex; justify-content: space-between; gap: 20px; padding: 21px 0 30px; color: var(--muted); border-top: 1px solid var(--line); font-size: 12px; }
+      .footer span:last-child { font-family: "DM Mono", monospace; font-size: 10px; }
+      @media (max-width: 760px) {
+        .hero { padding: 58px 0 42px; }
+        .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 540px) {
+        .shell { width: min(100% - 34px, 1120px); }
+        .top-note { display: none; }
+        .section-head { align-items: stretch; flex-direction: column; }
+        .search-wrap { width: 100%; }
+        .grid { grid-template-columns: 1fr; }
+        .card { min-height: 165px; }
+        .footer { flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell topbar">
+      <a class="brand" href="/" aria-label="autowiki home">
+        <span class="brand-mark">a</span>
+        <span class="brand-name"><span class="brand-auto">auto</span><span class="brand-wiki">wiki</span></span>
+      </a>
+      <span class="top-note">GIT-SOURCED · ALWAYS REBUILDING</span>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <div class="eyebrow">Engineering knowledge, connected</div>
+        <h1>Your engineering wiki,<br><span>automatically built from Git.</span></h1>
+        <p class="intro">One home for your team's documentation. autowiki keeps it current from the repositories you already work in—so the knowledge is ready when you need it.</p>
+      </section>
+
+      <section class="library" aria-labelledby="library-title">
+        <div class="section-head">
+          <div>
+            <h2 id="library-title">Documentation library</h2>
+            <div class="count" id="doc-count">Loading available guides…</div>
+          </div>
+          <label class="search-wrap">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <input class="search" id="search" type="search" placeholder="Find documentation…" aria-label="Search documentation">
+          </label>
+        </div>
+        <div class="grid" id="catalog" aria-live="polite">
+          <div class="empty"><strong>Loading the library</strong>Gathering the latest published documentation.</div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell footer">
+      <span>Source of truth: your Git repositories.</span>
+      <span>AUTOWIKI / ENGINEERING KNOWLEDGE PORTAL</span>
+    </footer>
+
+    <script>
+      const catalog = document.getElementById("catalog");
+      const count = document.getElementById("doc-count");
+      const search = document.getElementById("search");
+      let documents = [];
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+        })[char]);
+      }
+
+      function render() {
+        const query = search.value.trim().toLowerCase();
+        const visible = documents.filter((doc) =>
+          `${doc.label} ${doc.description}`.toLowerCase().includes(query)
+        );
+        count.textContent = `${visible.length} ${visible.length === 1 ? "guide" : "guides"} available`;
+        if (!visible.length) {
+          catalog.innerHTML = `<div class="empty"><strong>${documents.length ? "No matching guides" : "Your library is getting ready"}</strong>${documents.length ? "Try another search term." : "Published documentation will appear here as repositories finish building."}</div>`;
+          return;
+        }
+        catalog.innerHTML = visible.map((doc) => {
+          const label = escapeHtml(doc.label || doc.name);
+          const description = escapeHtml(doc.description);
+          const url = `/${String(doc.name).split("/").map(encodeURIComponent).join("/")}/`;
+          return `
+          <a class="card" href="${url}">
+            <span class="card-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M6 3.8h8l4 4v12.4H6V3.8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 4v4h4M9 13h6M9 16.5h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+            <svg class="arrow" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <h3>${label}</h3>
+            <p>${description}</p>
+          </a>`;
+        }).join("");
+      }
+
+      search.addEventListener("input", render);
+      fetch("/catalog.json", { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) throw new Error("Catalog is not available");
+          return response.json();
+        })
+        .then((data) => { documents = Array.isArray(data) ? data : []; render(); })
+        .catch(() => {
+          documents = [];
+          count.textContent = "Documentation library unavailable";
+          catalog.innerHTML = '<div class="empty"><strong>Could not load the library</strong>Please try again shortly.</div>';
+        });
+    </script>
+  </body>
+</html>
