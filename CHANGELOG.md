@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0-rc](https://github.com/ardikabs/autowiki/compare/v0.2.0...v0.3.0-rc) (2026-10-18)
+
+
+### Features
+
+* cut release candidates via prerelease versioning ([#6](https://github.com/ardikabs/autowiki/issues/6)) ([47d5836](https://github.com/ardikabs/autowiki/commit/47d583606f5ec78931733599f8e9237326119edc))
+
 ## [0.2.0](https://github.com/ardikabs/autowiki/compare/v0.1.0...v0.2.0) (2026-10-18)
 
 
