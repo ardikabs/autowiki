@@ -1,5 +1,12 @@
 FROM cgr.dev/chainguard/wolfi-base:latest
 
+ARG VERSION=dev
+
+LABEL org.opencontainers.image.title="autowiki" \
+      org.opencontainers.image.description="Git-backed documentation portal" \
+      org.opencontainers.image.source="https://github.com/ardikabs/autowiki" \
+      org.opencontainers.image.version="${VERSION}"
+
 RUN apk add --no-cache \
       python-3.12 \
       py3.12-pip \
@@ -11,7 +18,8 @@ RUN apk add --no-cache \
     && python3.12 -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:${PATH}" \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    AUTOWIKI_VERSION="${VERSION}"
 
 WORKDIR /app
 
