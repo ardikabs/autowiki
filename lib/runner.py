@@ -21,6 +21,7 @@ from mkdocs.config import load_config
 
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "/etc/wiki.yaml"))
 LANDING_PAGE_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "index.html"
+__version__ = os.environ.get("AUTOWIKI_VERSION", "dev")
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 
 logging.basicConfig(
@@ -784,6 +785,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] in ("--version", "-V"):
+        print(__version__)
+        raise SystemExit(0)
     if len(sys.argv) == 2 and sys.argv[1] == "--worker":
         try:
             worker_payload = json.load(sys.stdin)
