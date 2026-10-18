@@ -3,7 +3,9 @@
     ".": {
       "release-type": "simple",
       "include-component-in-tag": false,
-      "versioning": "always-bump-minor",
+      "versioning": "prerelease",
+      "prerelease": true,
+      "prerelease-type": "rc",
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },
