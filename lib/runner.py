@@ -21,6 +21,8 @@ from mkdocs.config import load_config
 
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "/etc/wiki.yaml"))
 LANDING_PAGE_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "index.html"
+NAV_SCRIPT_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "autowiki-nav.js"
+NOT_FOUND_PAGE_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "404.html"
 __version__ = os.environ.get("AUTOWIKI_VERSION", "dev")
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 
@@ -314,6 +316,14 @@ def build_repository(
             f"Failed to load MkDocs configuration for {name}: {exc}"
         ) from exc
 
+    # Inject autowiki navigation script so users can navigate back to the portal
+    parsed_base = urlsplit(base_url)
+    base_path = parsed_base.path.rstrip("/")
+    nav_script_path = f"{base_path}/autowiki-nav.js" if base_path else "/autowiki-nav.js"
+    extra_js = config.setdefault("extra_javascript", [])
+    if nav_script_path not in extra_js:
+        extra_js.append(nav_script_path)
+
     logger.info("Building documentation for %s into %s", name, site_dir / name)
     try:
         build(config)
@@ -554,12 +564,23 @@ def build_catalog(repositories: list[dict], site_dir: Path) -> list[dict[str, st
 
 
 def install_landing_page(site_dir: Path) -> None:
-    """Install the static landing page unless one is already present."""
-    landing_page = site_dir / "index.html"
-    if landing_page.exists():
-        return
+    """Install static portal pages and navigation assets into site_dir."""
     site_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(LANDING_PAGE_TEMPLATE, landing_page)
+    landing_page = site_dir / "index.html"
+    if not landing_page.exists() and LANDING_PAGE_TEMPLATE.is_file():
+        shutil.copyfile(LANDING_PAGE_TEMPLATE, landing_page)
+
+    not_found_page = site_dir / "404.html"
+    if (
+        not not_found_page.exists()
+        and not not_found_page.is_symlink()
+        and NOT_FOUND_PAGE_TEMPLATE.is_file()
+    ):
+        shutil.copyfile(NOT_FOUND_PAGE_TEMPLATE, not_found_page)
+
+    nav_script = site_dir / "autowiki-nav.js"
+    if NAV_SCRIPT_TEMPLATE.is_file():
+        shutil.copyfile(NAV_SCRIPT_TEMPLATE, nav_script)
 
 
 def write_catalog(repositories: list[dict], site_dir: Path) -> None:
