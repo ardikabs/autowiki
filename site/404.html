@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f3ed">
+    <meta name="description" content="The requested autowiki page could not be found.">
+    <title>404 | autowiki</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f5f3ed;
+        --ink: #22251f;
+        --muted: #6a6d65;
+        --line: #ddded5;
+        --accent: #315fce;
+      }
+      * { box-sizing: border-box; }
+      body {
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: "DM Sans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; }
+      .shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 28px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: flex;
+        min-height: 44px;
+        align-items: center;
+        gap: 11px;
+        text-decoration: none;
+      }
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        color: #fff;
+        background: var(--accent);
+        border-radius: 9px;
+        font-family: "Manrope", sans-serif;
+        font-size: 20px;
+        font-weight: 800;
+      }
+      .brand:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+      .brand-name {
+        font-family: "Manrope", sans-serif;
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: -0.7px;
+      }
+      .brand-auto { color: var(--accent); }
+      .brand-wiki { color: var(--ink); }
+      .top-note {
+        color: var(--muted);
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+      }
+      main {
+        display: grid;
+        flex: 1;
+        place-items: center;
+        padding: 64px 0;
+      }
+      .message { width: min(100%, 650px); }
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--accent);
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-family: "Manrope", sans-serif;
+        font-size: clamp(42px, 7vw, 68px);
+        font-weight: 600;
+        letter-spacing: -0.065em;
+        line-height: 1.04;
+      }
+      .copy {
+        max-width: 520px;
+        margin: 0 0 28px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+      }
+      .home-link {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        color: #fff;
+        background: var(--accent);
+        border-radius: 7px;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background-color 160ms ease;
+      }
+      .home-link:hover { background: #274eae; }
+      .home-link:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 4px;
+      }
+      .footer {
+        padding: 21px 0 30px;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+      }
+      @media (max-width: 540px) {
+        .shell { width: min(100% - 34px, 1120px); }
+        .top-note { display: none; }
+        .topbar { padding: 22px 0; }
+        main { padding: 48px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell topbar">
+      <a class="brand" href="/" aria-label="autowiki home">
+        <span class="brand-mark" aria-hidden="true">a</span>
+        <span class="brand-name"><span class="brand-auto">auto</span><span class="brand-wiki">wiki</span></span>
+      </a>
+      <span class="top-note">ENGINEERING KNOWLEDGE PORTAL</span>
+    </header>
+
+    <main class="shell">
+      <section class="message" aria-labelledby="not-found-title">
+        <p class="eyebrow">404 / PAGE NOT FOUND</p>
+        <h1 id="not-found-title">This page isn’t here.</h1>
+        <p class="copy">The address may be out of date, or the page may have moved.</p>
+        <a class="home-link" href="/">Back to autowiki</a>
+      </section>
+    </main>
+
+    <footer class="shell footer">Source of truth: your Git repositories.</footer>
+  </body>
+</html>

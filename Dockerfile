@@ -28,6 +28,8 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY lib/runner.py /app/runner.py
 COPY site/index.html /site/index.html
+COPY site/autowiki-nav.js /site/autowiki-nav.js
+COPY site/404.html /site/404.html
 COPY conf/nginx.conf /etc/nginx/nginx.conf
 
 RUN mkdir -p /srv/docs /repos /run /tmp/nginx/client_temp /var/lib/nginx/tmp /var/log/nginx \

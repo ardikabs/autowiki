@@ -1,0 +1,17 @@
+services:
+  autowiki:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: autowiki
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.example.yaml:/etc/wiki.yaml:ro
+      - autowiki-repos:/repos
+      - autowiki-docs:/srv/docs
+    restart: unless-stopped
+
+volumes:
+  autowiki-repos:
+  autowiki-docs:

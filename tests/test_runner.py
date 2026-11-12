@@ -237,6 +237,45 @@ class CatalogTests(unittest.TestCase):
             install_landing_page(site_dir)
 
             self.assertIn("Your engineering wiki", (site_dir / "index.html").read_text())
+            self.assertTrue((site_dir / "autowiki-nav.js").is_file())
+            self.assertIn("autowiki-nav-root", (site_dir / "autowiki-nav.js").read_text())
+
+    def test_installs_not_found_page_into_site_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir)
+
+            install_landing_page(site_dir)
+
+            not_found_page = site_dir / "404.html"
+            self.assertTrue(not_found_page.is_file())
+            self.assertIn("This page isn’t here.", not_found_page.read_text())
+
+    def test_preserves_existing_not_found_page(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir)
+            not_found_page = site_dir / "404.html"
+            not_found_page.write_text("<h1>Custom not found page</h1>")
+
+            install_landing_page(site_dir)
+
+            self.assertEqual(
+                not_found_page.read_text(),
+                "<h1>Custom not found page</h1>",
+            )
+
+    def test_does_not_write_through_dangling_not_found_symlink(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            site_dir = root / "site"
+            site_dir.mkdir()
+            target = root / "outside.html"
+            not_found_page = site_dir / "404.html"
+            not_found_page.symlink_to(target)
+
+            install_landing_page(site_dir)
+
+            self.assertTrue(not_found_page.is_symlink())
+            self.assertFalse(target.exists())
 
     def test_catalog_includes_only_docs_with_published_index(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -338,6 +377,36 @@ class CatalogTests(unittest.TestCase):
                 json.loads(result_path.read_text()),
                 {"revision": "abc123", "built": True},
             )
+
+    def test_build_repository_injects_nav_script(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            checkout_dir = root / "repo"
+            docs_dir = checkout_dir / "docs"
+            docs_dir.mkdir(parents=True)
+            (docs_dir / "index.md").write_text("# Welcome")
+            (checkout_dir / "mkdocs.yml").write_text("site_name: Demo\n")
+            site_dir = root / "sites"
+            site_dir.mkdir()
+
+            repo = {"name": "demo", "docs": "."}
+            with (
+                patch.object(runner, "git"),
+                patch.object(runner, "build") as mock_build,
+            ):
+                runner.build_repository(
+                    repo=repo,
+                    checkout_dir=checkout_dir,
+                    revision="HEAD",
+                    base_url="https://docs.example.test",
+                    site_dir=site_dir,
+                    lock_dir=root / "locks",
+                )
+
+                mock_build.assert_called_once()
+                config = mock_build.call_args[0][0]
+                self.assertIn("/autowiki-nav.js", config["extra_javascript"])
+
 
 
 if __name__ == "__main__":
