@@ -68,8 +68,9 @@ def git(checkout_dir: Path, *args: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        # Avoid logging raw stderr: it may contain a credential-bearing URL.
-        raise RuntimeError(f"Git command failed with exit code {result.returncode}")
+        # Note: Printing stderr here might log credential URLs if they are embedded in the remote.
+        # It is useful for debugging auth issues.
+        raise RuntimeError(f"Git command failed: {result.stderr.strip() or f'exit code {result.returncode}'}")
     return result.stdout.strip()
 
 
@@ -174,8 +175,9 @@ def sync_repository(repo: dict, repo_dir: Path) -> tuple[Path, str]:
     name = repo["name"]
     checkout_dir = repo_dir / name
 
-    # Keep repository names as direct child directory names.
-    if not name or Path(name).name != name or name in {".", ".."}:
+    # Allow nested directories but prevent absolute paths and path traversal
+    p = Path(name)
+    if not name or p.is_absolute() or ".." in p.parts or name == ".":
         raise ValueError(f"Invalid repository name: {name!r}")
 
     if not checkout_dir.exists():
@@ -494,9 +496,12 @@ def deduplicate_repositories(repositories: list[dict]) -> list[dict]:
         if not name:
             logger.warning("Skipping repository without a name")
             continue
-        if Path(name).name != name or name in {".", ".."}:
+            
+        p = Path(name)
+        if p.is_absolute() or ".." in p.parts or name == ".":
             logger.warning("Skipping repository with invalid name %r", name)
             continue
+            
         if not isinstance(repo.get("git"), str) or not repo["git"].strip():
             logger.warning("Skipping repository %s without a Git remote", name)
             continue
