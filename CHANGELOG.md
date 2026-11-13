@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/ardikabs/autowiki/compare/v0.3.0...v0.3.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* build every repository in batches and add portal favicon ([#12](https://github.com/ardikabs/autowiki/issues/12)) ([f1e9ed9](https://github.com/ardikabs/autowiki/commit/f1e9ed9a45d4dca1b758688986a115e7b376c78b))
+
 ## [0.3.0](https://github.com/ardikabs/autowiki/compare/v0.2.0...v0.3.0) (2026-11-12)
 
 
