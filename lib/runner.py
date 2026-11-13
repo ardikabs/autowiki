@@ -4,6 +4,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import signal
 import shutil
 import subprocess
@@ -48,6 +49,12 @@ DEFAULT_BUILD_TIMEOUT_SECONDS = 600
 # Default max concurrent builds
 DEFAULT_MAX_CONCURRENT_BUILDS = 4
 
+# One or more path segments. ".", "..", empty segments, and trailing slashes
+# are rejected so pathlib cannot collapse them into a different directory.
+_REPOSITORY_NAME = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*"
+)
+
 
 def handle_shutdown(signum, _frame):
     signame = signal.Signals(signum).name
@@ -68,9 +75,8 @@ def git(checkout_dir: Path, *args: str) -> str:
         check=False,
     )
     if result.returncode != 0:
-        # Note: Printing stderr here might log credential URLs if they are embedded in the remote.
-        # It is useful for debugging auth issues.
-        raise RuntimeError(f"Git command failed: {result.stderr.strip() or f'exit code {result.returncode}'}")
+        # Avoid logging raw stderr: it may contain a credential-bearing URL.
+        raise RuntimeError(f"Git command failed with exit code {result.returncode}")
     return result.stdout.strip()
 
 
@@ -99,6 +105,46 @@ def canonical_repository_identity(remote: str) -> str:
     if path.lower().endswith(".git"):
         path = path[:-4]
     return f"{host.lower()}/{path}"
+
+
+def canonical_repository_name(name: object) -> str:
+    """Return a relative repository name that cannot collapse to another path."""
+    if not isinstance(name, str) or _REPOSITORY_NAME.fullmatch(name) is None:
+        raise ValueError(f"Invalid repository name: {name!r}")
+    return name
+
+
+def contained_directory(root: Path, name: str) -> Path:
+    """Resolve name under root and reject symlink escapes."""
+    root_resolved = root.resolve()
+    resolved = (root / name).resolve()
+    if resolved == root_resolved or not resolved.is_relative_to(root_resolved):
+        raise ValueError(f"Repository path escapes its root: {name!r}")
+    return resolved
+
+
+def assert_no_nested_repository_names(names: list[str]) -> None:
+    """Reject a repository whose directory contains another repository."""
+    ordered = sorted(names)
+    for parent, child in zip(ordered, ordered[1:]):
+        if child.startswith(parent + "/"):
+            raise ValueError(
+                f"Repository name {child!r} is nested inside {parent!r}"
+            )
+
+
+def assert_no_git_ancestor(root: Path, checkout: Path) -> None:
+    """Refuse to init a checkout inside a Git worktree already on disk."""
+    root_resolved = root.resolve()
+    current = checkout.parent
+    while current.resolve().is_relative_to(root_resolved) and current.resolve() != root_resolved:
+        if (current / ".git").exists():
+            raise RuntimeError(
+                f"{checkout} is inside an existing Git checkout at {current}"
+            )
+        if current == current.parent:
+            return
+        current = current.parent
 
 
 def acquire_repository_locks(
@@ -172,13 +218,9 @@ def terminate_process_group(
 
 def sync_repository(repo: dict, repo_dir: Path) -> tuple[Path, str]:
     """Sync repository and return (checkout_dir, revision)."""
-    name = repo["name"]
-    checkout_dir = repo_dir / name
-
-    # Allow nested directories but prevent absolute paths and path traversal
-    p = Path(name)
-    if not name or p.is_absolute() or ".." in p.parts or name == ".":
-        raise ValueError(f"Invalid repository name: {name!r}")
+    name = canonical_repository_name(repo["name"])
+    checkout_dir = contained_directory(repo_dir, name)
+    assert_no_git_ancestor(repo_dir, checkout_dir)
 
     if not checkout_dir.exists():
         checkout_dir.mkdir(parents=True)
@@ -274,7 +316,8 @@ def build_repository(
     lock_dir: Path,
 ) -> None:
     """Build MkDocs documentation with stop signal checking."""
-    name = repo["name"]
+    name = canonical_repository_name(repo["name"])
+    output_dir = contained_directory(site_dir, name)
 
     # Reset tracked changes and remove untracked/ignored checkout contents,
     # so the working tree matches the fetched commit.
@@ -311,7 +354,7 @@ def build_repository(
         config = load_config(
             config_file=str(mkdocs_config),
             site_url=f"{base_url.rstrip('/')}/{name}/",
-            site_dir=str(site_dir / name),
+            site_dir=str(output_dir),
         )
     except Exception as exc:
         raise RuntimeError(
@@ -326,7 +369,7 @@ def build_repository(
     if nav_script_path not in extra_js:
         extra_js.append(nav_script_path)
 
-    logger.info("Building documentation for %s into %s", name, site_dir / name)
+    logger.info("Building documentation for %s into %s", name, output_dir)
     try:
         build(config)
     except Exception as exc:
@@ -485,23 +528,23 @@ def stop_nginx(proc: subprocess.Popen | None) -> None:
 
 def deduplicate_repositories(repositories: list[dict]) -> list[dict]:
     """
-    Deduplicate repositories by name, keeping the first occurrence.
+    Deduplicate repositories by canonical name, keeping the first occurrence.
     Logs a warning when duplicates are found.
     """
     seen_names: set[str] = set()
     unique_repos: list[dict] = []
 
     for repo in repositories:
-        name = repo.get("name")
-        if not name:
+        raw_name = repo.get("name")
+        if not raw_name:
             logger.warning("Skipping repository without a name")
             continue
-            
-        p = Path(name)
-        if p.is_absolute() or ".." in p.parts or name == ".":
-            logger.warning("Skipping repository with invalid name %r", name)
+        try:
+            name = canonical_repository_name(raw_name)
+        except ValueError:
+            logger.warning("Skipping repository with invalid name %r", raw_name)
             continue
-            
+
         if not isinstance(repo.get("git"), str) or not repo["git"].strip():
             logger.warning("Skipping repository %s without a Git remote", name)
             continue
@@ -515,7 +558,7 @@ def deduplicate_repositories(repositories: list[dict]) -> list[dict]:
             )
             continue
         seen_names.add(name)
-        unique_repos.append(repo)
+        unique_repos.append({**repo, "name": name})
 
     if len(unique_repos) != len(repositories):
         logger.warning(
@@ -754,6 +797,7 @@ def main() -> None:
     # Deduplicate repositories - first occurrence wins
     repositories = deduplicate_repositories(settings.get("repositories", []))
     repositories = deduplicate_repository_sources(repositories)
+    assert_no_nested_repository_names([repo["name"] for repo in repositories])
     if not isinstance(poll_interval, (int, float)) or poll_interval <= 0:
         raise ValueError("poll_interval_seconds must be greater than zero")
     if not isinstance(build_timeout, (int, float)) or build_timeout <= 0:
