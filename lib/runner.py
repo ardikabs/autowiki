@@ -23,6 +23,7 @@ CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "/etc/wiki.yaml"))
 LANDING_PAGE_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "index.html"
 NAV_SCRIPT_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "autowiki-nav.js"
 NOT_FOUND_PAGE_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "404.html"
+FAVICON_TEMPLATE = Path(__file__).resolve().parent.parent / "site" / "favicon.svg"
 __version__ = os.environ.get("AUTOWIKI_VERSION", "dev")
 DEFAULT_POLL_INTERVAL_SECONDS = 60
 
@@ -41,6 +42,10 @@ mkdocs_logger.setLevel(logging.INFO)
 # the manager can stop them reliably when they time out or receive SIGTERM.
 stop_event = threading.Event()
 last_built: dict[str, str] = {}
+# Names still waiting to be checked in the current sweep over all repositories.
+# A sweep drains in batches of at most max_workers as slots free up, so every
+# entry is visited before the next sweep starts.
+_sweep_pending: list[str] = []
 
 # Default build timeout in seconds (10 minutes)
 DEFAULT_BUILD_TIMEOUT_SECONDS = 600
@@ -578,6 +583,10 @@ def install_landing_page(site_dir: Path) -> None:
     ):
         shutil.copyfile(NOT_FOUND_PAGE_TEMPLATE, not_found_page)
 
+    favicon = site_dir / "favicon.svg"
+    if not favicon.exists() and not favicon.is_symlink() and FAVICON_TEMPLATE.is_file():
+        shutil.copyfile(FAVICON_TEMPLATE, favicon)
+
     nav_script = site_dir / "autowiki-nav.js"
     if NAV_SCRIPT_TEMPLATE.is_file():
         shutil.copyfile(NAV_SCRIPT_TEMPLATE, nav_script)
@@ -607,7 +616,6 @@ def run_poll_cycle(
     start_new_builds: bool,
 ) -> None:
     """Poll repos without waiting for active workers; locks span poll cycles."""
-
     def reap_finished() -> None:
         for name, (proc, result_path, _started, locks, identity) in list(running.items()):
             code = proc.poll()
@@ -644,14 +652,19 @@ def run_poll_cycle(
             result_path.unlink(missing_ok=True)
     reap_finished()
 
-    if stop_event.is_set() or not start_new_builds:
+    if stop_event.is_set() or not (start_new_builds or _sweep_pending):
         return
 
+    if start_new_builds and not _sweep_pending:
+        _sweep_pending[:] = [repo["name"] for repo in repositories]
+
+    by_name = {repo["name"]: repo for repo in repositories}
     available = max_workers - len(running)
-    for repo in repositories:
-        if available <= 0 or stop_event.is_set():
-            break
-        name = repo["name"]
+    while _sweep_pending and available > 0 and not stop_event.is_set():
+        name = _sweep_pending.pop(0)
+        repo = by_name.get(name)
+        if repo is None:
+            continue
         identity = canonical_repository_identity(repo["git"])
         if name in running or identity in source_locks:
             continue

@@ -185,6 +185,117 @@ class PollCycleTests(unittest.TestCase):
 
                 stop_nginx_and_workers(running, source_locks, None)
 
+    def test_all_repos_share_slots_fairly_across_ticks(self):
+        repositories = [
+            {
+                "name": f"repo{i}",
+                "git": f"https://example.test/org/repo{i}.git",
+                "revision": "main",
+            }
+            for i in range(5)
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            site_dir = root / "sites"
+            for repo in repositories:
+                published = site_dir / repo["name"]
+                published.mkdir(parents=True)
+                (published / "index.html").write_text("published")
+
+            running = {}
+            source_locks = {}
+            runner.stop_event.clear()
+            runner._sweep_pending.clear()
+
+            launched = []
+
+            def fake_launch(repo, *_args, **_kwargs):
+                launched.append(repo["name"])
+                result_path = root / f"result-launched-{repo['name']}-{len(launched)}"
+                process = subprocess.Popen(
+                    [sys.executable, "-c", "pass"],
+                    start_new_session=True,
+                )
+                process.wait(timeout=5)
+                return process, result_path
+
+            try:
+                with patch.object(runner, "launch_worker", side_effect=fake_launch):
+                    for _ in range(3):
+                        runner.run_poll_cycle(
+                            repositories=repositories,
+                            repo_dir=root / "repos",
+                            site_dir=site_dir,
+                            base_url="https://docs.example.test",
+                            max_workers=4,
+                            build_timeout=30,
+                            lock_dir=root / "locks",
+                            running=running,
+                            source_locks=source_locks,
+                            start_new_builds=True,
+                        )
+
+                    self.assertEqual(
+                        sorted(set(launched)),
+                        [f"repo{i}" for i in range(5)],
+                    )
+            finally:
+                stop_nginx_and_workers(running, source_locks, None)
+                runner._sweep_pending.clear()
+
+    def test_sweep_builds_every_repo_in_batches_within_one_poll_interval(self):
+        repositories = [
+            {
+                "name": f"repo{i}",
+                "git": f"https://example.test/org/repo{i}.git",
+                "revision": "main",
+            }
+            for i in range(10)
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            running = {}
+            source_locks = {}
+            runner.stop_event.clear()
+            runner._sweep_pending.clear()
+            launched = []
+            peak = 0
+
+            def fake_launch(repo, *_args, **_kwargs):
+                launched.append(repo["name"])
+                process = subprocess.Popen(
+                    [sys.executable, "-c", "pass"], start_new_session=True
+                )
+                process.wait(timeout=5)
+                return process, root / f"result-{repo['name']}"
+
+            try:
+                with (
+                    patch.object(runner, "launch_worker", side_effect=fake_launch),
+                    patch.object(runner, "write_catalog"),
+                ):
+                    for tick in range(4):
+                        runner.run_poll_cycle(
+                            repositories=repositories,
+                            repo_dir=root / "repos",
+                            site_dir=root / "sites",
+                            base_url="https://docs.example.test",
+                            max_workers=4,
+                            build_timeout=30,
+                            lock_dir=root / "locks",
+                            running=running,
+                            source_locks=source_locks,
+                            # Only the first tick is a poll boundary.
+                            start_new_builds=tick == 0,
+                        )
+                        peak = max(peak, len(running))
+
+                self.assertEqual(launched, [f"repo{i}" for i in range(10)])
+                self.assertLessEqual(peak, 4)
+            finally:
+                stop_nginx_and_workers(running, source_locks, None)
+                runner._sweep_pending.clear()
+
     def test_reaped_worker_updates_last_built_and_logs_build_once(self):
         repo = {
             "name": "docs",
@@ -276,6 +387,27 @@ class CatalogTests(unittest.TestCase):
 
             self.assertTrue(not_found_page.is_symlink())
             self.assertFalse(target.exists())
+
+    def test_installs_favicon_into_site_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir)
+
+            install_landing_page(site_dir)
+
+            favicon = site_dir / "favicon.svg"
+            self.assertTrue(favicon.is_file())
+            self.assertIn("<svg", favicon.read_text())
+            self.assertIn("#315fce", favicon.read_text())
+
+    def test_preserves_existing_custom_favicon(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir)
+            favicon = site_dir / "favicon.svg"
+            favicon.write_text("<svg>custom favicon</svg>")
+
+            install_landing_page(site_dir)
+
+            self.assertEqual(favicon.read_text(), "<svg>custom favicon</svg>")
 
     def test_catalog_includes_only_docs_with_published_index(self):
         with tempfile.TemporaryDirectory() as temp_dir:
