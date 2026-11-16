@@ -30,6 +30,19 @@ class RepositoryDeduplicationTests(unittest.TestCase):
 
         self.assertEqual(deduplicate_repositories(repositories), repositories[:1])
 
+    def test_nested_names_are_kept_and_malformed_paths_are_skipped(self):
+        repositories = [
+            {
+                "name": "team/docs",
+                "git": "https://example.com/team/docs.git",
+                "revision": "main",
+            },
+            {"name": "team//docs", "git": "https://example.com/double-slash.git"},
+            {"name": "team/../outside", "git": "https://example.com/traversal.git"},
+        ]
+
+        self.assertEqual(deduplicate_repositories(repositories), repositories[:1])
+
     def test_different_names_for_same_remote_keep_one_entry(self):
         repositories = [
             {"name": "docs", "git": "https://token@example.com/team/project.git", "revision": "main"},
