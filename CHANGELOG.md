@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/ardikabs/autowiki/compare/v0.3.1...v0.4.0) (2026-11-16)
+
+
+### Features
+
+* allow nested repository names and improve git error logging ([#11](https://github.com/ardikabs/autowiki/issues/11)) ([97c9e16](https://github.com/ardikabs/autowiki/commit/97c9e16983efdcb8f5f67d80b3e07c04d158e67a))
+
 ## [0.3.1](https://github.com/ardikabs/autowiki/compare/v0.3.0...v0.3.1) (2026-11-13)
 
 
