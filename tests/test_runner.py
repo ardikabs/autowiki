@@ -553,6 +553,27 @@ class CatalogTests(unittest.TestCase):
                 self.assertIn("/autowiki-nav.js", config["extra_javascript"])
 
 
+class StaticModeTests(unittest.TestCase):
+    def test_resolve_build_mode_defaults_to_auto(self):
+        from lib.runner import resolve_build_mode
+        self.assertEqual(resolve_build_mode({}), "auto")
+        self.assertEqual(resolve_build_mode({"mode": "auto"}), "auto")
+        self.assertEqual(resolve_build_mode({"mode": "static"}), "static")
+        self.assertEqual(resolve_build_mode({"mode": "mkdocs"}), "mkdocs")
+
+    def test_resolve_build_mode_rejects_unknown(self):
+        from lib.runner import resolve_build_mode
+        with self.assertRaises(ValueError):
+            resolve_build_mode({"mode": "hugo"})
+
+    def test_find_mkdocs_config(self):
+        from lib.runner import find_mkdocs_config
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.assertIsNone(find_mkdocs_config(root))
+            (root / "mkdocs.yml").write_text("site_name: x\n")
+            self.assertEqual(find_mkdocs_config(root), root / "mkdocs.yml")
+
 
 if __name__ == "__main__":
     unittest.main()

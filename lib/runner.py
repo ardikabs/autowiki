@@ -60,6 +60,38 @@ _REPOSITORY_NAME = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*"
 )
 
+VALID_BUILD_MODES = frozenset({"auto", "mkdocs", "static"})
+
+STATIC_ALLOWED_SUFFIXES = frozenset({
+    ".html", ".htm", ".css", ".js", ".mjs", ".json", ".xml",
+    ".txt", ".md", ".svg", ".png", ".jpg", ".jpeg", ".gif",
+    ".webp", ".avif", ".ico", ".woff", ".woff2", ".ttf",
+    ".eot", ".otf", ".pdf", ".map", ".webmanifest",
+})
+
+
+def resolve_build_mode(repo: dict) -> str:
+    """Return the build mode for a repository entry (default 'auto')."""
+    mode = repo.get("mode", "auto")
+    if mode is None:
+        return "auto"
+    if not isinstance(mode, str) or mode not in VALID_BUILD_MODES:
+        raise ValueError(f"Invalid build mode: {mode!r}")
+    return mode
+
+
+def find_mkdocs_config(docs_path: Path) -> Path | None:
+    """Return the MkDocs config file for docs_path, or None if absent."""
+    if docs_path.is_file():
+        return docs_path
+    if not docs_path.is_dir():
+        return None
+    for candidate in ("mkdocs.yml", "mkdocs.yaml"):
+        config = docs_path / candidate
+        if config.is_file():
+            return config
+    return None
+
 
 def handle_shutdown(signum, _frame):
     signame = signal.Signals(signum).name
