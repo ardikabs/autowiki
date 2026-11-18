@@ -487,14 +487,25 @@ def build_repository(
     if not docs_path.is_relative_to(checkout_root):
         raise ValueError(f"Docs path for {name} must be inside its checkout")
 
-    if docs_path.is_file():
-        mkdocs_config = docs_path
-    elif (docs_path / "mkdocs.yml").is_file():
-        mkdocs_config = docs_path / "mkdocs.yml"
-    elif (docs_path / "mkdocs.yaml").is_file():
-        mkdocs_config = docs_path / "mkdocs.yaml"
-    else:
+    mode = resolve_build_mode(repo)
+    mkdocs_config = find_mkdocs_config(docs_path)
+    if mode == "static":
+        if docs_path.is_file():
+            raise ValueError(f"Static docs path for {name} must be a directory: {docs_path}")
+        if not docs_path.is_dir():
+            raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
+        publish_static_directory(name, docs_path, output_dir, base_url)
+        return
+    if mkdocs_config is not None:
+        pass  # MkDocs path below (mkdocs mode, or auto + config found)
+    elif mode == "mkdocs":
         raise FileNotFoundError(f"Missing MkDocs config in: {docs_path}")
+    else:
+        # auto with no config -> static path
+        if not docs_path.is_dir():
+            raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
+        publish_static_directory(name, docs_path, output_dir, base_url)
+        return
 
     # Check for requirements.txt in docs directory (e.g. website/requirements.txt) or repo root
     req_candidates = [
@@ -707,6 +718,12 @@ def deduplicate_repositories(repositories: list[dict]) -> list[dict]:
             continue
         if not isinstance(repo.get("revision"), str) or not repo["revision"].strip():
             logger.warning("Skipping repository %s without a revision", name)
+            continue
+        mode = repo.get("mode", "auto")
+        if mode is None:
+            mode = "auto"
+        if not isinstance(mode, str) or mode not in VALID_BUILD_MODES:
+            logger.warning("Skipping repository %s with invalid mode %r", name, repo.get("mode"))
             continue
         if name in seen_names:
             logger.warning(

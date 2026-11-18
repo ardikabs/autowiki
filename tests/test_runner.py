@@ -617,6 +617,68 @@ class StaticModeTests(unittest.TestCase):
             self.assertFalse((out / "evil.html").exists())
             self.assertTrue((out / "index.html").is_file())
 
+    def test_build_repository_auto_falls_back_to_static(self):
+        import lib.runner as r
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            checkout = root / "co"
+            docs = checkout / "website"
+            docs.mkdir(parents=True)
+            (docs / "index.html").write_text("<html><body>static</body></html>")
+            out_parent = root / "sites"
+            out_parent.mkdir()
+            with patch.object(r, "git"):
+                r.build_repository(
+                    repo={"name": "demo", "docs": "website"},
+                    checkout_dir=checkout, revision="abc",
+                    base_url="https://docs.example.test",
+                    site_dir=out_parent, lock_dir=root / "locks",
+                )
+            self.assertTrue((out_parent / "demo" / "index.html").is_file())
+
+    def test_build_repository_mkdocs_mode_still_errors(self):
+        import lib.runner as r
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            checkout = root / "co"
+            docs = checkout / "website"
+            docs.mkdir(parents=True)
+            with patch.object(r, "git"):
+                with self.assertRaises(FileNotFoundError):
+                    r.build_repository(
+                        repo={"name": "demo", "docs": "website", "mode": "mkdocs"},
+                        checkout_dir=checkout, revision="abc",
+                        base_url="https://docs.example.test",
+                        site_dir=root / "sites", lock_dir=root / "locks",
+                    )
+
+    def test_build_repository_static_mode_ignores_mkdocs_config(self):
+        import lib.runner as r
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            checkout = root / "co"
+            docs = checkout / "website"
+            docs.mkdir(parents=True)
+            (docs / "mkdocs.yml").write_text("site_name: Demo\n")
+            (docs / "index.html").write_text("<html><body>s</body></html>")
+            with patch.object(r, "git"), patch.object(r, "build") as mk_build:
+                r.build_repository(
+                    repo={"name": "demo", "docs": "website", "mode": "static"},
+                    checkout_dir=checkout, revision="abc",
+                    base_url="https://docs.example.test",
+                    site_dir=root / "sites", lock_dir=root / "locks",
+                )
+                mk_build.assert_not_called()
+            self.assertTrue((root / "sites" / "demo" / "index.html").is_file())
+
+    def test_deduplicate_skips_invalid_mode(self):
+        from lib.runner import deduplicate_repositories
+        repos = [
+            {"name": "ok", "git": "https://example.com/ok.git", "revision": "main"},
+            {"name": "bad", "git": "https://example.com/bad.git", "revision": "main", "mode": "hugo"},
+        ]
+        self.assertEqual([x["name"] for x in deduplicate_repositories(repos)], ["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
