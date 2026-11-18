@@ -679,6 +679,18 @@ class StaticModeTests(unittest.TestCase):
         ]
         self.assertEqual([x["name"] for x in deduplicate_repositories(repos)], ["ok"])
 
+    def test_build_repository_static_mode_with_file_docs_errors(self):
+        import lib.runner as r
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            checkout = root / "co"
+            checkout.mkdir(parents=True)
+            cfg = checkout / "mkdocs.yml"
+            cfg.write_text("site_name: Demo\n")
+            with patch.object(r, "git"):
+                with self.assertRaises(ValueError):
+                    r.build_repository(repo={"name": "demo", "docs": "mkdocs.yml", "mode": "static"}, checkout_dir=checkout, revision="abc", base_url="https://docs.example.test", site_dir=root / "sites", lock_dir=root / "locks")
+
     def test_failed_static_publish_preserves_previous_site(self):
         import lib.runner as r
         with tempfile.TemporaryDirectory() as td:

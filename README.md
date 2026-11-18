@@ -48,7 +48,7 @@ Each repository entry supports:
 | `git` | string | Git remote URL. Equivalent common HTTPS and SSH forms are treated as the same source. |
 | `revision` | string | Branch, tag, or ref to fetch, such as `main` or `refs/heads/release`. |
 | `docs` | string | Path inside the checkout to the MkDocs project directory or config file, or to a pre-built static site root (served as-is when no MkDocs config is found). |
-| `mode` | string | `auto` | Build mode: `auto`, `mkdocs`, or `static`. |
+| `mode` | string | Build mode: `auto` (default), `mkdocs`, or `static`. |
 | `label` | string | Optional human-friendly title shown for the documentation card. Falls back to `name`. |
 | `description` | string | Optional short summary shown on the landing page. Falls back to `Documentation maintained from {name}.` |
 
@@ -95,6 +95,7 @@ Static sites (Hugo or other pre-built output) need no extra config — point
 Build the static output with the public base, e.g.
 `hugo --baseURL https://docs.example.com/website/ -d docs/website`.
 Only browser-safe extensions are published; dotfiles and executables are skipped.
+autowiki does not rewrite absolute asset URLs.
 
 ## Run with Docker
 

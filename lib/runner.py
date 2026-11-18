@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import re
-import signal
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -103,8 +103,7 @@ def inject_nav_script(html_path: Path, nav_script_path: str) -> bool:
     tag = f'<script src="{nav_script_path}" defer></script>'
     if nav_script_path in text:
         return False
-    import re as _re
-    match = list(_re.finditer(r"</body\s*>", text, _re.IGNORECASE))
+    match = list(re.finditer(r"</body\s*>", text, re.IGNORECASE))
     if match:
         pos = match[-1].start()
         text = text[:pos] + tag + text[pos:]
@@ -133,10 +132,12 @@ def publish_static_directory(
     nav_script_path = f"{base_path}/autowiki-nav.js" if base_path else "/autowiki-nav.js"
 
     output_dir.parent.mkdir(parents=True, exist_ok=True)
-    tmp_dir = Path(tempfile.mkdtemp(prefix=f".tmp-{name}-", dir=str(output_dir.parent)))
+    safe = name.replace("/", "_")
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f".tmp-{safe}-", dir=str(output_dir.parent)))
     count = 0
     try:
-        for current_root, dirnames, filenames in os.walk(docs_resolved, followlinks=False):
+        for current_root, dirnames, filenames in os.walk(docs_resolved, followlinks=True):
+
             kept_dirs: list[str] = []
             for entry in list(dirnames):
                 if entry.startswith(".") or entry == "__pycache__":
@@ -146,12 +147,16 @@ def publish_static_directory(
                     try:
                         resolved = full.resolve()
                     except OSError:
+                        logger.debug("Skipping symlinked dir %s (unresolvable)", full)
                         continue
                     if not resolved.is_relative_to(docs_resolved):
+                        logger.debug("Skipping symlinked dir %s (escapes docs root)", full)
                         continue
                     if not resolved.is_dir():
+                        logger.debug("Skipping symlinked dir %s (not a directory)", full)
                         continue
                 kept_dirs.append(entry)
+
             dirnames[:] = kept_dirs
             for filename in filenames:
                 if filename.startswith("."):
@@ -163,8 +168,10 @@ def publish_static_directory(
                     try:
                         resolved = src.resolve()
                     except OSError:
+                        logger.debug("Skipping symlink %s (unresolvable)", src)
                         continue
                     if not resolved.is_relative_to(docs_resolved) or not resolved.is_file():
+                        logger.debug("Skipping symlink %s (escapes docs root or not a file)", src)
                         continue
                     copy_from = resolved
                 else:
@@ -185,12 +192,14 @@ def publish_static_directory(
                 if dest.suffix.lower() in (".html", ".htm"):
                     inject_nav_script(dest, nav_script_path)
                 count += 1
+
         for current_root, dirnames, _filenames in os.walk(tmp_dir):
             for entry in dirnames:
                 try:
                     (Path(current_root) / entry).chmod(0o755)
                 except OSError:
                     pass
+
         try:
             tmp_dir.chmod(0o755)
         except OSError:
@@ -208,9 +217,12 @@ def publish_static_directory(
                 shutil.rmtree(output_dir)
         os.replace(tmp_dir, output_dir)
         return count
-    except Exception:
+    except ValueError:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
+    except Exception as exc:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise RuntimeError(f"Static publish failed for {name}: {exc}") from exc
 
 
 def handle_shutdown(signum, _frame):
@@ -488,7 +500,6 @@ def build_repository(
         raise ValueError(f"Docs path for {name} must be inside its checkout")
 
     mode = resolve_build_mode(repo)
-    mkdocs_config = find_mkdocs_config(docs_path)
     if mode == "static":
         if docs_path.is_file():
             raise ValueError(f"Static docs path for {name} must be a directory: {docs_path}")
@@ -496,6 +507,8 @@ def build_repository(
             raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
         publish_static_directory(name, docs_path, output_dir, base_url)
         return
+
+    mkdocs_config = find_mkdocs_config(docs_path)
     if mkdocs_config is not None:
         pass  # MkDocs path below (mkdocs mode, or auto + config found)
     elif mode == "mkdocs":
@@ -504,6 +517,7 @@ def build_repository(
         # auto with no config -> static path
         if not docs_path.is_dir():
             raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
+
         publish_static_directory(name, docs_path, output_dir, base_url)
         return
 
@@ -512,6 +526,7 @@ def build_repository(
         (docs_path if docs_path.is_dir() else docs_path.parent) / "requirements.txt",
         checkout_dir / "requirements.txt",
     ]
+
     for req_file in req_candidates:
         if req_file.is_file():
             install_requirements(req_file, lock_dir)

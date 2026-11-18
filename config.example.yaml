@@ -37,7 +37,7 @@ repositories:
     # Path, relative to the repository root, to the MkDocs project directory
     # or config file — or to a pre-built static site root (Hugo etc.).
     # If no mkdocs.yml/mkdocs.yaml is found, the directory is published as-is.
-    # For example: /repos/hibernator/website/mkdocs.yml or /repos/hibernator/docs/website/index.html
+    # For example: /repos/hibernator/website/mkdocs.yml or /repos/hibernator/docs/website
     docs: "website"
 
     # Optional build mode: "auto" (default), "mkdocs", or "static".
