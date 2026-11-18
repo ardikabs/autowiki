@@ -574,6 +574,49 @@ class StaticModeTests(unittest.TestCase):
             (root / "mkdocs.yml").write_text("site_name: x\n")
             self.assertEqual(find_mkdocs_config(root), root / "mkdocs.yml")
 
+    def test_publish_static_copies_allowlist_and_injects_nav(self):
+        from lib.runner import publish_static_directory
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            (src / "assets").mkdir(parents=True)
+            (src / "index.html").write_text("<html><body><h1>Hi</h1></body></html>")
+            (src / "assets" / "app.css").write_text("body{}")
+            (src / "run.py").write_text("evil()")
+            (src / ".secret").write_text("hidden")
+            (src / "README").write_text("noext")
+            out = root / "out"
+            count = publish_static_directory(
+                name="demo", docs_path=src, output_dir=out,
+                base_url="https://docs.example.test",
+            )
+            self.assertEqual(count, 2)
+            self.assertTrue((out / "index.html").is_file())
+            self.assertTrue((out / "assets" / "app.css").is_file())
+            self.assertFalse((out / "run.py").exists())
+            self.assertFalse((out / ".secret").exists())
+            self.assertFalse((out / "README").exists())
+            html = (out / "index.html").read_text()
+            self.assertIn("/autowiki-nav.js", html)
+
+    def test_publish_static_skips_symlink_escape(self):
+        from lib.runner import publish_static_directory
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            src = root / "src"
+            src.mkdir()
+            (src / "index.html").write_text("<html><body>x</body></html>")
+            outside = root / "outside.html"
+            outside.write_text("<html>evil</html>")
+            (src / "evil.html").symlink_to(outside)
+            out = root / "out"
+            publish_static_directory(
+                name="demo", docs_path=src, output_dir=out,
+                base_url="https://docs.example.test",
+            )
+            self.assertFalse((out / "evil.html").exists())
+            self.assertTrue((out / "index.html").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

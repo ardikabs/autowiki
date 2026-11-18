@@ -93,6 +93,126 @@ def find_mkdocs_config(docs_path: Path) -> Path | None:
     return None
 
 
+def inject_nav_script(html_path: Path, nav_script_path: str) -> bool:
+    """Inject the portal nav script into one HTML file. Returns True if changed."""
+    try:
+        text = html_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        logger.warning("Skipping nav injection for %s (unreadable)", html_path)
+        return False
+    tag = f'<script src="{nav_script_path}" defer></script>'
+    if nav_script_path in text:
+        return False
+    import re as _re
+    match = list(_re.finditer(r"</body\s*>", text, _re.IGNORECASE))
+    if match:
+        pos = match[-1].start()
+        text = text[:pos] + tag + text[pos:]
+    else:
+        text = text + tag
+    try:
+        html_path.write_text(text, encoding="utf-8")
+    except OSError:
+        logger.warning("Skipping nav injection for %s (unwritable)", html_path)
+        return False
+    return True
+
+
+def publish_static_directory(
+    name: str,
+    docs_path: Path,
+    output_dir: Path,
+    base_url: str,
+) -> int:
+    """Copy a pre-built static directory into output_dir. Returns file count."""
+    if not docs_path.is_dir():
+        raise ValueError(f"Static docs path for {name} must be a directory: {docs_path}")
+    docs_resolved = docs_path.resolve()
+    parsed_base = urlsplit(base_url)
+    base_path = parsed_base.path.rstrip("/")
+    nav_script_path = f"{base_path}/autowiki-nav.js" if base_path else "/autowiki-nav.js"
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f".tmp-{name}-", dir=str(output_dir.parent)))
+    count = 0
+    try:
+        for current_root, dirnames, filenames in os.walk(docs_resolved, followlinks=False):
+            kept_dirs: list[str] = []
+            for entry in list(dirnames):
+                if entry.startswith(".") or entry == "__pycache__":
+                    continue
+                full = Path(current_root) / entry
+                if full.is_symlink():
+                    try:
+                        resolved = full.resolve()
+                    except OSError:
+                        continue
+                    if not resolved.is_relative_to(docs_resolved):
+                        continue
+                    if not resolved.is_dir():
+                        continue
+                kept_dirs.append(entry)
+            dirnames[:] = kept_dirs
+            for filename in filenames:
+                if filename.startswith("."):
+                    continue
+                src = Path(current_root) / filename
+                if src.suffix.lower() not in STATIC_ALLOWED_SUFFIXES:
+                    continue
+                if src.is_symlink():
+                    try:
+                        resolved = src.resolve()
+                    except OSError:
+                        continue
+                    if not resolved.is_relative_to(docs_resolved) or not resolved.is_file():
+                        continue
+                    copy_from = resolved
+                else:
+                    if not src.is_file():
+                        continue
+                    copy_from = src
+                try:
+                    rel = (Path(current_root) / filename).relative_to(docs_resolved)
+                except ValueError:
+                    continue
+                dest = tmp_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(copy_from, dest)
+                try:
+                    dest.chmod(0o644)
+                except OSError:
+                    pass
+                if dest.suffix.lower() in (".html", ".htm"):
+                    inject_nav_script(dest, nav_script_path)
+                count += 1
+        for current_root, dirnames, _filenames in os.walk(tmp_dir):
+            for entry in dirnames:
+                try:
+                    (Path(current_root) / entry).chmod(0o755)
+                except OSError:
+                    pass
+        try:
+            tmp_dir.chmod(0o755)
+        except OSError:
+            pass
+        if count == 0:
+            logger.warning("Static directory for %s is empty after filtering: %s", name, docs_path)
+        if not (tmp_dir / "index.html").is_file():
+            logger.warning("Static directory for %s has no index.html; it will be hidden from the catalog", name)
+        else:
+            logger.info("Published static site for %s from %s (%d files)", name, docs_path, count)
+        if output_dir.exists() or output_dir.is_symlink():
+            if output_dir.is_symlink() or output_dir.is_file():
+                output_dir.unlink()
+            else:
+                shutil.rmtree(output_dir)
+        os.replace(tmp_dir, output_dir)
+        return count
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+
+
 def handle_shutdown(signum, _frame):
     signame = signal.Signals(signum).name
     logger.info("Received %s; stopping repository workers...", signame)
