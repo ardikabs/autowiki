@@ -47,7 +47,8 @@ Each repository entry supports:
 | `name` | string | Unique site ID; used as the URL path and output folder. Must be a direct child name (no path separators). Also used as the card title if `label` is unset. |
 | `git` | string | Git remote URL. Equivalent common HTTPS and SSH forms are treated as the same source. |
 | `revision` | string | Branch, tag, or ref to fetch, such as `main` or `refs/heads/release`. |
-| `docs` | string | Path inside the checkout to the MkDocs project directory or config file. |
+| `docs` | string | Path inside the checkout to the MkDocs project directory or config file, or to a pre-built static site root (served as-is when no MkDocs config is found). |
+| `mode` | string | `auto` | Build mode: `auto`, `mkdocs`, or `static`. |
 | `label` | string | Optional human-friendly title shown for the documentation card. Falls back to `name`. |
 | `description` | string | Optional short summary shown on the landing page. Falls back to `Documentation maintained from {name}.` |
 
@@ -79,6 +80,21 @@ repositories:
     docs: "website"
     description: "API references and service integration guides."
 ```
+
+Static sites (Hugo or other pre-built output) need no extra config — point
+`docs` at the built directory containing `index.html`:
+
+```yaml
+  - name: "website"
+    git: "https://github.com/example/website.git"
+    revision: "main"
+    docs: "docs/website"
+    # mode: "static"  # force static even if a mkdocs.yml exists
+```
+
+Build the static output with the public base, e.g.
+`hugo --baseURL https://docs.example.com/website/ -d docs/website`.
+Only browser-safe extensions are published; dotfiles and executables are skipped.
 
 ## Run with Docker
 
