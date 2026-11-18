@@ -679,6 +679,24 @@ class StaticModeTests(unittest.TestCase):
         ]
         self.assertEqual([x["name"] for x in deduplicate_repositories(repos)], ["ok"])
 
+    def test_failed_static_publish_preserves_previous_site(self):
+        import lib.runner as r
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            out = root / "sites" / "demo"
+            out.mkdir(parents=True)
+            (out / "index.html").write_text("old")
+            src = root / "src"
+            src.mkdir()
+            (src / "index.html").write_text("new")
+            with patch.object(r.shutil, "copy2", side_effect=OSError("disk full")):
+                with self.assertRaises(Exception):
+                    r.publish_static_directory(
+                        name="demo", docs_path=src, output_dir=out,
+                        base_url="https://docs.example.test",
+                    )
+            self.assertEqual((out / "index.html").read_text(), "old")
+
 
 if __name__ == "__main__":
     unittest.main()
