@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/ardikabs/autowiki/compare/v0.4.0...v0.5.0) (2026-11-18)
+
+
+### Features
+
+* static dir support ([#15](https://github.com/ardikabs/autowiki/issues/15)) ([867643e](https://github.com/ardikabs/autowiki/commit/867643eca27e5604945e60aca6f1610e818c4863))
+
 ## [0.4.0](https://github.com/ardikabs/autowiki/compare/v0.3.1...v0.4.0) (2026-11-16)
 
 
