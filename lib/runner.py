@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import re
-import signal
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -59,6 +59,170 @@ DEFAULT_MAX_CONCURRENT_BUILDS = 4
 _REPOSITORY_NAME = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*"
 )
+
+VALID_BUILD_MODES = frozenset({"auto", "mkdocs", "static"})
+
+STATIC_ALLOWED_SUFFIXES = frozenset({
+    ".html", ".htm", ".css", ".js", ".mjs", ".json", ".xml",
+    ".txt", ".md", ".svg", ".png", ".jpg", ".jpeg", ".gif",
+    ".webp", ".avif", ".ico", ".woff", ".woff2", ".ttf",
+    ".eot", ".otf", ".pdf", ".map", ".webmanifest",
+})
+
+
+def resolve_build_mode(repo: dict) -> str:
+    """Return the build mode for a repository entry (default 'auto')."""
+    mode = repo.get("mode", "auto")
+    if mode is None:
+        return "auto"
+    if not isinstance(mode, str) or mode not in VALID_BUILD_MODES:
+        raise ValueError(f"Invalid build mode: {mode!r}")
+    return mode
+
+
+def find_mkdocs_config(docs_path: Path) -> Path | None:
+    """Return the MkDocs config file for docs_path, or None if absent."""
+    if docs_path.is_file():
+        return docs_path
+    if not docs_path.is_dir():
+        return None
+    for candidate in ("mkdocs.yml", "mkdocs.yaml"):
+        config = docs_path / candidate
+        if config.is_file():
+            return config
+    return None
+
+
+def inject_nav_script(html_path: Path, nav_script_path: str) -> bool:
+    """Inject the portal nav script into one HTML file. Returns True if changed."""
+    try:
+        text = html_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        logger.warning("Skipping nav injection for %s (unreadable)", html_path)
+        return False
+    tag = f'<script src="{nav_script_path}" defer></script>'
+    if nav_script_path in text:
+        return False
+    match = list(re.finditer(r"</body\s*>", text, re.IGNORECASE))
+    if match:
+        pos = match[-1].start()
+        text = text[:pos] + tag + text[pos:]
+    else:
+        text = text + tag
+    try:
+        html_path.write_text(text, encoding="utf-8")
+    except OSError:
+        logger.warning("Skipping nav injection for %s (unwritable)", html_path)
+        return False
+    return True
+
+
+def publish_static_directory(
+    name: str,
+    docs_path: Path,
+    output_dir: Path,
+    base_url: str,
+) -> int:
+    """Copy a pre-built static directory into output_dir. Returns file count."""
+    if not docs_path.is_dir():
+        raise ValueError(f"Static docs path for {name} must be a directory: {docs_path}")
+    docs_resolved = docs_path.resolve()
+    parsed_base = urlsplit(base_url)
+    base_path = parsed_base.path.rstrip("/")
+    nav_script_path = f"{base_path}/autowiki-nav.js" if base_path else "/autowiki-nav.js"
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    safe = name.replace("/", "_")
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f".tmp-{safe}-", dir=str(output_dir.parent)))
+    count = 0
+    try:
+        for current_root, dirnames, filenames in os.walk(docs_resolved, followlinks=True):
+
+            kept_dirs: list[str] = []
+            for entry in list(dirnames):
+                if entry.startswith(".") or entry == "__pycache__":
+                    continue
+                full = Path(current_root) / entry
+                if full.is_symlink():
+                    try:
+                        resolved = full.resolve()
+                    except OSError:
+                        logger.debug("Skipping symlinked dir %s (unresolvable)", full)
+                        continue
+                    if not resolved.is_relative_to(docs_resolved):
+                        logger.debug("Skipping symlinked dir %s (escapes docs root)", full)
+                        continue
+                    if not resolved.is_dir():
+                        logger.debug("Skipping symlinked dir %s (not a directory)", full)
+                        continue
+                kept_dirs.append(entry)
+
+            dirnames[:] = kept_dirs
+            for filename in filenames:
+                if filename.startswith("."):
+                    continue
+                src = Path(current_root) / filename
+                if src.suffix.lower() not in STATIC_ALLOWED_SUFFIXES:
+                    continue
+                if src.is_symlink():
+                    try:
+                        resolved = src.resolve()
+                    except OSError:
+                        logger.debug("Skipping symlink %s (unresolvable)", src)
+                        continue
+                    if not resolved.is_relative_to(docs_resolved) or not resolved.is_file():
+                        logger.debug("Skipping symlink %s (escapes docs root or not a file)", src)
+                        continue
+                    copy_from = resolved
+                else:
+                    if not src.is_file():
+                        continue
+                    copy_from = src
+                try:
+                    rel = (Path(current_root) / filename).relative_to(docs_resolved)
+                except ValueError:
+                    continue
+                dest = tmp_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(copy_from, dest)
+                try:
+                    dest.chmod(0o644)
+                except OSError:
+                    pass
+                if dest.suffix.lower() in (".html", ".htm"):
+                    inject_nav_script(dest, nav_script_path)
+                count += 1
+
+        for current_root, dirnames, _filenames in os.walk(tmp_dir):
+            for entry in dirnames:
+                try:
+                    (Path(current_root) / entry).chmod(0o755)
+                except OSError:
+                    pass
+
+        try:
+            tmp_dir.chmod(0o755)
+        except OSError:
+            pass
+        if count == 0:
+            logger.warning("Static directory for %s is empty after filtering: %s", name, docs_path)
+        if not (tmp_dir / "index.html").is_file():
+            logger.warning("Static directory for %s has no index.html; it will be hidden from the catalog", name)
+        else:
+            logger.info("Published static site for %s from %s (%d files)", name, docs_path, count)
+        if output_dir.exists() or output_dir.is_symlink():
+            if output_dir.is_symlink() or output_dir.is_file():
+                output_dir.unlink()
+            else:
+                shutil.rmtree(output_dir)
+        os.replace(tmp_dir, output_dir)
+        return count
+    except ValueError:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+    except Exception as exc:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise RuntimeError(f"Static publish failed for {name}: {exc}") from exc
 
 
 def handle_shutdown(signum, _frame):
@@ -335,20 +499,34 @@ def build_repository(
     if not docs_path.is_relative_to(checkout_root):
         raise ValueError(f"Docs path for {name} must be inside its checkout")
 
-    if docs_path.is_file():
-        mkdocs_config = docs_path
-    elif (docs_path / "mkdocs.yml").is_file():
-        mkdocs_config = docs_path / "mkdocs.yml"
-    elif (docs_path / "mkdocs.yaml").is_file():
-        mkdocs_config = docs_path / "mkdocs.yaml"
-    else:
+    mode = resolve_build_mode(repo)
+    if mode == "static":
+        if docs_path.is_file():
+            raise ValueError(f"Static docs path for {name} must be a directory: {docs_path}")
+        if not docs_path.is_dir():
+            raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
+        publish_static_directory(name, docs_path, output_dir, base_url)
+        return
+
+    mkdocs_config = find_mkdocs_config(docs_path)
+    if mkdocs_config is not None:
+        pass  # MkDocs path below (mkdocs mode, or auto + config found)
+    elif mode == "mkdocs":
         raise FileNotFoundError(f"Missing MkDocs config in: {docs_path}")
+    else:
+        # auto with no config -> static path
+        if not docs_path.is_dir():
+            raise FileNotFoundError(f"Missing docs directory in: {docs_path}")
+
+        publish_static_directory(name, docs_path, output_dir, base_url)
+        return
 
     # Check for requirements.txt in docs directory (e.g. website/requirements.txt) or repo root
     req_candidates = [
         (docs_path if docs_path.is_dir() else docs_path.parent) / "requirements.txt",
         checkout_dir / "requirements.txt",
     ]
+
     for req_file in req_candidates:
         if req_file.is_file():
             install_requirements(req_file, lock_dir)
@@ -555,6 +733,12 @@ def deduplicate_repositories(repositories: list[dict]) -> list[dict]:
             continue
         if not isinstance(repo.get("revision"), str) or not repo["revision"].strip():
             logger.warning("Skipping repository %s without a revision", name)
+            continue
+        mode = repo.get("mode", "auto")
+        if mode is None:
+            mode = "auto"
+        if not isinstance(mode, str) or mode not in VALID_BUILD_MODES:
+            logger.warning("Skipping repository %s with invalid mode %r", name, repo.get("mode"))
             continue
         if name in seen_names:
             logger.warning(

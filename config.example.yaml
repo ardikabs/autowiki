@@ -34,7 +34,13 @@ repositories:
     # Git branch, tag, or ref to fetch and track.
     revision: "main"
 
-    # Path, relative to the repository root, to the MkDocs project directory.
-    # This directory must contain mkdocs.yml.
-    # For example: /repos/hibernator/website/mkdocs.yml
+    # Path, relative to the repository root, to the MkDocs project directory
+    # or config file — or to a pre-built static site root (Hugo etc.).
+    # If no mkdocs.yml/mkdocs.yaml is found, the directory is published as-is.
+    # For example: /repos/hibernator/website/mkdocs.yml or /repos/hibernator/docs/website
     docs: "website"
+
+    # Optional build mode: "auto" (default), "mkdocs", or "static".
+    # auto: MkDocs when a config is found, otherwise static copy.
+    # mkdocs: fail if no MkDocs config exists. static: always copy as-is.
+    # mode: "auto"
